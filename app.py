@@ -58,13 +58,31 @@ STOCK_DICT = {
 }
 
 def resolve_ticker(text):
+    import requests
     t = text.strip()
+    # 1. 딕셔너리 직접 매칭
     if t in STOCK_DICT: return STOCK_DICT[t]
     for k, v in STOCK_DICT.items():
         if k.lower() == t.lower(): return v
+    # 2. 6자리 숫자 → 한국 종목
     if t.isdigit() and len(t) == 6: return t + '.KS'
+    # 3. 이미 티커 형식이면 그대로
     if t.upper().endswith('.KS') or t.upper().endswith('.KQ'): return t.upper()
     if t.replace('-','').isalpha(): return t.upper()
+    # 4. 야후파이낸스 검색 API — 종목명으로 티커 찾기
+    try:
+        url = f'https://query2.finance.yahoo.com/v1/finance/search?q={requests.utils.quote(t)}&lang=ko-KR&region=KR&quotesCount=5&newsCount=0'
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        quotes = res.json().get('quotes', [])
+        # 한국 거래소 우선
+        for q in quotes:
+            if q.get('exchange') in ('KSC', 'KOE') and q.get('symbol'):
+                return q['symbol']
+        # 없으면 첫 번째 결과
+        if quotes and quotes[0].get('symbol'):
+            return quotes[0]['symbol']
+    except:
+        pass
     return t
 
 # ── 지표 계산 ───────────────────────────────────────────────
